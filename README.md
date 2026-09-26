@@ -16,7 +16,8 @@ temperature, which the BIOS cannot see.
 Portability, layer by layer:
 
 - **Works anywhere**: `gpu-temp-log.sh` (any Linux + NVIDIA box; fan columns stay empty
-  without an `it8665` hwmon, slots fall back to `unknown`) and `gpu-temp-prune.*` (pure
+  without an `it8665` hwmon, slots fall back to `unknown`; the Prometheus textfile writes
+  no-op when `/var/lib/prometheus/node-exporter` is absent) and `gpu-temp-prune.*` (pure
   file retention).
 - **Works on boards whose Super I/O is an ITE IT86xx** (in-tree driver or fork):
   `gpu-fan-curve.py`, given the right pwm index — that's the `pwmN` CLI arg, per board.
@@ -107,6 +108,15 @@ renumber per boot).
    `fan2_input` tracks (~8 rpm/duty mid-band).
 4. Logger CSV (`/var/tmp/170hx_logs/`) rows carry live `fan_rpm`/`fan_pct` (resolved per sample;
    `fan_pct` is the commanded duty normalized to 0–100).
+5. **Prometheus textfile (obs stack, added 2026-09-26):** with `prometheus-node-exporter`
+   installed, each sample writes `/var/lib/prometheus/node-exporter/170hx-gpu.prom`
+   (`gpu_hbm/core_temp_celsius`, `gpu_power_watts` per slot+serial, `gpu_fan_rpm`,
+   `gpu_fan_duty_percent`, `gpu_exporter_last_sample_timestamp_seconds` — frozen gauge
+   means the logger died) and `vllm-bridge.prom` (raw `vllm:*` passthrough from the
+   serving pod's NodePort :31566/metrics; removed while vLLM is down). Metric names must
+   not start with a digit — the Prometheus text format rejects `170hx_*`. obs Prometheus
+   scrapes this host via file_sd (`host="gpuz"`, G1 already allows 9100); dashboard panes:
+   170HX temps/power/fan, vLLM tokens/s + concurrent requests.
 5. **Boot path (verify after an actual reboot, not just a restart):** `lsmod | grep it87`
    is populated with no manual action. Do NOT expect a "modprobe" hit in
    `journalctl -b -u gpu-fan-curve.service` — a successful ExecStartPre logs nothing; and

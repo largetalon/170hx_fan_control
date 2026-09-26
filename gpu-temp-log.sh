@@ -25,8 +25,21 @@
 # BIOS-curve rows self-mark).
 # Note: a stop mid-sample (SIGTERM during the nvidia-smi pipeline) can leave one timestamp
 # with fewer than 4 rows — consumers must not assume exactly 4 rows per ts.
+#
+# Prometheus output (2026-09-26): when /var/lib/prometheus/node-exporter exists
+# (node_exporter textfile collector, installed for the obs stack), each sample also
+# atomically writes two .prom files there:
+#   170hx-gpu.prom   — per-card hbm/core temp, power (slot+serial labels), hub fan
+#                      rpm/duty, and gpu_exporter_last_sample_timestamp_seconds
+#                      (frozen gauge = exporter stopped, never assume liveness)
+#   vllm-bridge.prom — raw vllm:* lines passed through from the serving pod's
+#                      /metrics (cross-VLAN Prometheus cannot reach the NodePort;
+#                      file removed when vLLM is down so metrics gap, not freeze)
+# Unwritable/missing dir → CSV-only, exactly as before.
 LOGDIR=${1:-/var/tmp/170hx_logs}
 INT=${2:-5}
+PROMDIR=/var/lib/prometheus/node-exporter
+VLLM_METRICS_URL=http://localhost:31566/metrics   # microk8s NodePort, vllm-glm53-flash-awq
 # Real serial→slot map lives in /etc/gpu-slots.tsv (never committed — the repo copy
 # is a sanitized template). Fall back to the repo copy for local testing.
 SLOTMAP=/etc/gpu-slots.tsv
@@ -50,14 +63,32 @@ while :; do
   done
   FAN_RPM=""; FAN_PCT=""
   [ -n "$FANDEV" ] && { FAN_RPM=$(cat "$FANDEV/fan2_input" 2>/dev/null); FAN_PCT=$(( ( $(cat "$FANDEV/pwm2" 2>/dev/null || echo 0) * 100 + 127 ) / 255 )); }
-  nvidia-smi --query-gpu=serial,temperature.memory,temperature.gpu,power.draw,\
-utilization.gpu,clocks_event_reasons.active --format=csv,noheader,nounits |
-  while IFS=, read -r serial hbm core pw ug thr; do
-    serial=$(echo "$serial" | xargs)
-    slot=$([ -f "$SLOTMAP" ] && awk -F'\t' -v s="$serial" '$1==s{print $2}' "$SLOTMAP")
-    printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n" "$ts" "$serial" "${slot:-unknown}" \
-      "$(echo $hbm|xargs)" "$(echo $core|xargs)" "$(echo $pw|xargs)" "$(echo $ug|xargs)" \
-      "$(( $(echo $thr|xargs) ))" "$FAN_RPM" "$FAN_PCT"
-  done >> "$LOG"
+  SMI=$(nvidia-smi --query-gpu=serial,temperature.memory,temperature.gpu,power.draw,\
+utilization.gpu,clocks_event_reasons.active --format=csv,noheader,nounits 2>/dev/null) \
+  && [ -n "$SMI" ] && {
+    PROM=""
+    while IFS=, read -r serial hbm core pw ug thr; do
+      serial=$(echo "$serial" | xargs)
+      slot=$([ -f "$SLOTMAP" ] && awk -F'\t' -v s="$serial" '$1==s{print $2}' "$SLOTMAP")
+      hbm=$(echo $hbm|xargs); core=$(echo $core|xargs); pw=$(echo $pw|xargs); ug=$(echo $ug|xargs)
+      printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n" "$ts" "$serial" "${slot:-unknown}" \
+        "$hbm" "$core" "$pw" "$ug" "$(( $(echo $thr|xargs) ))" "$FAN_RPM" "$FAN_PCT" >> "$LOG"
+      for kv in "hbm_temp_celsius|$hbm" "core_temp_celsius|$core" "power_watts|$pw"; do
+        name=${kv%%|*}; val=${kv#*|}
+        case "$val" in *[!0-9.]*) ;; *) [ -n "$val" ] && \
+          PROM="${PROM}gpu_$name{slot=\"${slot:-unknown}\",serial=\"$serial\"} $val\n";; esac
+      done
+    done <<< "$SMI"
+    [ -n "$FAN_RPM" ] && PROM="${PROM}gpu_fan_rpm{fan=\"cha_fan1\"} $FAN_RPM\n"
+    [ -n "$FAN_PCT" ] && PROM="${PROM}gpu_fan_duty_percent{fan=\"cha_fan1\"} $FAN_PCT\n"
+    PROM="${PROM}gpu_exporter_last_sample_timestamp_seconds $(date +%s)\n"
+    printf "$PROM" > "$PROMDIR/.170hx-gpu.prom.tmp" 2>/dev/null && \
+      mv "$PROMDIR/.170hx-gpu.prom.tmp" "$PROMDIR/170hx-gpu.prom" 2>/dev/null
+  }
+  # vLLM /metrics bridge (see header). File removed on any failure → gaps, not staleness.
+  VLM=$(curl -sf --max-time 4 "$VLLM_METRICS_URL" | grep '^vllm') && \
+    printf '%s\n' "$VLM" > "$PROMDIR/.vllm-bridge.prom.tmp" 2>/dev/null && \
+    mv "$PROMDIR/.vllm-bridge.prom.tmp" "$PROMDIR/vllm-bridge.prom" 2>/dev/null || \
+    rm -f "$PROMDIR/vllm-bridge.prom"
   sleep "$INT"
 done
