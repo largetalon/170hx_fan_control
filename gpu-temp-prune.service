@@ -1,0 +1,10 @@
+# /etc/systemd/system/gpu-temp-prune.service — canonical copy: 170hx_fan_control/gpu-temp-prune.service
+# Retention for the per-day temperature CSVs (replaces /etc/logrotate.d/gpu-temp,
+# removed 2026-09-26 — logrotate's daily rename fought the per-day filenames).
+
+[Unit]
+Description=Prune 170HX temperature CSVs older than 180 days
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/find /var/tmp/170hx_logs -maxdepth 1 -name 'gpu-temps-*.csv*' -mtime +180 -delete

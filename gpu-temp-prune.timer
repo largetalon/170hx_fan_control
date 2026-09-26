@@ -1,0 +1,11 @@
+# /etc/systemd/system/gpu-temp-prune.timer — canonical copy: 170hx_fan_control/gpu-temp-prune.timer
+
+[Unit]
+Description=Daily prune of 170HX temperature CSVs
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

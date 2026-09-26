@@ -1,0 +1,26 @@
+# /etc/systemd/system/gpu-fan-curve.service — canonical copy: 170hx_fan_control/gpu-fan-curve.service
+# Channel identified 2026-09-13 (maintenance window): pwm2 drives CHA_FAN1 via the ARCTIC hub.
+# Reference manual-mode observations: enable=1 read-back can show 0 on this chip (it is the
+# "manual, max duty" encoding); the duty register is the live truth.
+# 2026-09-16: modules-load.d path is dead here — kmod deny-lists blacklisted modules even for
+# named loads (journal: "Module 'it87' is deny-listed (by kmod)"), so the module is loaded by
+# ExecStartPre below. "-" = don't fail the unit if modprobe errors (BIOS curve keeps fleet safe).
+
+[Unit]
+Description=170HX HBM-temperature fan curve (ARCTIC hub on CHA_FAN1)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/sbin/modprobe it87
+ExecStart=/usr/local/sbin/gpu-fan-curve.py 2
+# Stop path: hand the header back to firmware auto mode (pwm2_enable=2), so the BIOS
+# curve — not a frozen duty — owns the fans whenever this service is off or
+# crash-looping. Resolves the it8665 device by name (hwmon indices renumber per boot);
+# pwm2 here matches the ExecStart arg (both = CHA_FAN1). "-" = never fail the stop.
+ExecStopPost=-/bin/sh -c 'for d in /sys/class/hwmon/hwmon*; do [ "$$(cat $$d/name 2>/dev/null)" = it8665 ] && echo 2 > $$d/pwm2_enable; done'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

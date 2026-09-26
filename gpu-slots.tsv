@@ -1,0 +1,14 @@
+# serial	physical_slot
+# 2026-09-13: platform re-cabled from x16/x8 PCIe risers to four OCuLink x4 links
+# (four sibling functions of one die-1 CPU root-complex device — PCI addresses
+# deliberately omitted from this public copy; resolve locally via lspci +
+# `nvidia-smi --query-gpu=serial`). Connector names PCIEX16_n are the motherboard
+# silkscreen and no longer describe the electrical path; slots are numbered by
+# Oculink position 1..4.
+# 2026-09-13 binding read from live lspci (root-port → serial), pending operator
+# physical confirmation of Oculink position numbering at the next power-down.
+# NOTE: this repo copy is sanitized — full serials live only in /etc/gpu-slots.tsv.
+.....8931	O4
+.....3600	O3
+.....2102	O2
+.....1075	O1
