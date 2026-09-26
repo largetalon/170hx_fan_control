@@ -1,10 +1,7 @@
 # Dynamic fan control — 170HX GPU blowers
 
 Drives the four 170HX GPU blowers (ARCTIC hub on `CHA_FAN1`) from the hottest HBM
-reading across the cards, via the ITE IT8665E Super I/O (`pwm2`). Design history,
-measurements and curve rationale live in `../cmp170hx/170hx-power-thermal-runbook.md`
-(§4, §8, §11.4 and the dated note in §4.4 — that runbook stays in the rig's cmp170hx
-repo; this repo holds only the deployable fan-control artifacts). This file is the deploy procedure.
+reading across the cards, via the ITE IT8665E Super I/O (`pwm2`).
 
 ## Why it87 — and what's hardware-specific
 
