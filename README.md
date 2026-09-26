@@ -108,7 +108,8 @@ renumber per boot).
 3. `pwm2_enable` reads back 1 (a 0 read-back is a known it8665 encoding on this chip —
    the duty register is the live truth); duty matches the curve for current max HBM;
    `fan2_input` tracks (~8 rpm/duty mid-band).
-4. Logger CSV (`/var/tmp/170hx_logs/`) rows carry live `fan_rpm`/`fan_duty` (resolved per sample).
+4. Logger CSV (`/var/tmp/170hx_logs/`) rows carry live `fan_rpm`/`fan_pct` (resolved per sample;
+   `fan_pct` is the commanded duty normalized to 0–100).
 5. **Boot path (verify after an actual reboot, not just a restart):** `lsmod | grep it87`
    is populated with no manual action. Do NOT expect a "modprobe" hit in
    `journalctl -b -u gpu-fan-curve.service` — a successful ExecStartPre logs nothing; and

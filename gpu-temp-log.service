@@ -1,6 +1,6 @@
 # /etc/systemd/system/gpu-temp-log.service — canonical copy: 170hx_fan_control/gpu-temp-log.service
 # Runs the logger in place so its gpu-slots.tsv lookup works. The per-day filename
-# (gpu-temps-YYYYMMDD.csv) is evaluated by the logger on every sample — midnight
+# (gpu-temps-v4-YYYYMMDD.csv) is evaluated by the logger on every sample — midnight
 # rollover starts a fresh file with its own header. Retention: gpu-temp-prune.timer
 # (180 days), not logrotate (removed 2026-09-26 — see gpu-temp-log.sh header).
 
